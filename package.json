@@ -1,0 +1,26 @@
+{
+  "name": "hardhat-project",
+  "scripts": {
+    "compile": "hardhat compile",
+    "export:fe-abis": "node scripts/export-fe-abis.js",
+    "add:raise-token": "hardhat run scripts/add-raise-token.js",
+    "curve:set-wallet-limit": "hardhat run scripts/set-max-wallet-percent.js",
+    "deploy:local": "hardhat run scripts/deploy.js",
+    "deploy:bscTestnet": "hardhat run scripts/deploy.js --network bscTestnet",
+    "deploy:bscMainnet": "hardhat run scripts/deploy.js --network bscMainnet"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.9.1",
+    "hardhat": "^2.26.3"
+  },
+  "dependencies": {
+    "@ankr.com/ankr.js": "^0.6.0",
+    "@chainlink/contracts": "^1.4.0",
+    "@openzeppelin/contracts": "^5.2.0",
+    "@openzeppelin/contracts-upgradeable": "^5.4.0",
+    "@uniswap/v2-core": "^1.0.1",
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
+    "dotenv": "^16.4.7"
+  }
+}

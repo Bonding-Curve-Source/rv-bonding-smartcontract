@@ -1,0 +1,15 @@
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "deployer": "0x70fE728D729756425fA5Dd50Af9896a613EF7D04",
+  "tokenFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
+  "bondingCurveDeployer": "0xC7f05af30EFEE3fDB1b330c9d792085b7Ade3566",
+  "memeFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
+  "deploymentTx": "0xf9d2f9e855d369f29905b392efdc75cf51f070b31a40af947c692c8b2ef4f5c8",
+  "deployedAt": "2026-04-12T16:10:21.879Z",
+  "contracts": {
+    "TokenFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
+    "BondingCurveDeployer": "0xC7f05af30EFEE3fDB1b330c9d792085b7Ade3566"
+  },
+  "notes": "BondingCurve được tạo qua BondingCurveDeployer (new BondingCurve) gọi từ TokenFactory.createToken; deploy script đã setCurveDeployer."
+}
