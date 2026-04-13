@@ -59,6 +59,17 @@ For sell input `dy` (token amount):
 - `priceInRaise = floor(x * 1e18 / y)`
 - `priceInUsd = floor(priceInRaise * oraclePrice / (10^oracleDecimals))`
 
+### Market Cap Normalized to USDT
+
+- Market cap is reported in USDT-equivalent for all pools, including native and ERC20 raise tokens.
+- Conversion ratio is taken strictly from Chainlink `AggregatorV3Interface` price feeds configured per raise token in factory settings.
+- Each raise token must map to its own Chainlink feed (for example `BNB/USD`, `USDT/USD`, `BUSD/USD`) before token creation.
+- Contract reads Chainlink `latestRoundData()` and uses feed decimals for normalization (`oracleDecimals`).
+- Formula:
+  - `marketCapInRaise = circulatingSupply * priceInRaise`
+  - `marketCapInUsdt = floor(marketCapInRaise * oraclePrice / (10^oracleDecimals))`
+- This keeps market-cap comparison consistent across pools that use different raise assets.
+
 ## 3) End-to-End Lifecycle Flow
 
 ## 3.1 Token Creation
