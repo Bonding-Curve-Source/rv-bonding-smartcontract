@@ -2,14 +2,14 @@
   "network": "bscTestnet",
   "chainId": 97,
   "deployer": "0x70fE728D729756425fA5Dd50Af9896a613EF7D04",
-  "tokenFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
-  "bondingCurveDeployer": "0xC7f05af30EFEE3fDB1b330c9d792085b7Ade3566",
-  "memeFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
-  "deploymentTx": "0xf9d2f9e855d369f29905b392efdc75cf51f070b31a40af947c692c8b2ef4f5c8",
-  "deployedAt": "2026-04-12T16:10:21.879Z",
+  "tokenFactory": "0x90Af1eB46f6320FBA3CbBBb2964Aa58a2f023a21",
+  "bondingCurveDeployer": "0x17c3AD5DFF9bc29a4DFb3C883A25d3A8AD0A36FF",
+  "memeFactory": "0x90Af1eB46f6320FBA3CbBBb2964Aa58a2f023a21",
+  "deploymentTx": "0xbe807c146852ee699d71a7ff4f81714fca689435dc291022811b6de3a2feb2e7",
+  "deployedAt": "2026-04-14T04:32:17.732Z",
   "contracts": {
-    "TokenFactory": "0x49D13502732Da3088c5E7BF3E029Fd90FDa626a0",
-    "BondingCurveDeployer": "0xC7f05af30EFEE3fDB1b330c9d792085b7Ade3566"
+    "TokenFactory": "0x90Af1eB46f6320FBA3CbBBb2964Aa58a2f023a21",
+    "BondingCurveDeployer": "0x17c3AD5DFF9bc29a4DFb3C883A25d3A8AD0A36FF"
   },
   "notes": "BondingCurve được tạo qua BondingCurveDeployer (new BondingCurve) gọi từ TokenFactory.createToken; deploy script đã setCurveDeployer."
 }

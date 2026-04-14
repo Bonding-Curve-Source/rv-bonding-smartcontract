@@ -13,7 +13,7 @@ contract TokenFactory is Ownable {
     using SafeERC20 for IERC20;
 
     /// @dev PancakeSwap V2 router on the same chain as `BondingCurve`.
-    address public constant PANCAKE_ROUTER = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
+    address public constant PANCAKE_ROUTER = 0x0D34BCe358Ec89099466e63f8766D047c8007ba5;
     /// @notice Allowlist for raise assets (address(0) can represent native asset).
     mapping(address => bool) public raiseAllowedTokens;
     uint256 public creationFee;

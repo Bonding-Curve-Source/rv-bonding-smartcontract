@@ -31,7 +31,7 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     uint256 public targetValue;
     uint256 public constant UPDATE_INTERVAL = 300 seconds;
     // Active PancakeSwap V2 addresses on BSC testnet.
-    address constant pancakeRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
+    address constant pancakeRouter = 0x0D34BCe358Ec89099466e63f8766D047c8007ba5;
     address constant wbnbAddress = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
 
     IERC20 public token;
@@ -310,7 +310,7 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
         }
     }
 
-    /// @dev Computes Pancake pair address from factory and token pair.
+    /// @dev CREATE2 pair for RAVI V2 factory (`RaviV2Pair` from @ravi/v2-core — run `yarn init-code-hash` in v2-core after compile).
     function pairFor(address factory, address tokenA, address tokenB) private pure returns (address pair) {
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
         pair = address(
@@ -321,7 +321,7 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
                             hex"ff",
                             factory,
                             keccak256(abi.encodePacked(token0, token1)),
-                            hex"00fb7f630766e6a796048ea87d01acd3068e8ff67d078148a3fa3f4a84f69bd5"
+                            hex"a1b8e52117ce7caece28872e24cf7706dfbe68e7b516da6afbd3c0bd78a212e1"
                         )
                     )
                 )
