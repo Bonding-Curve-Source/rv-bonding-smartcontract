@@ -1,0 +1,7 @@
+{
+  "filter_paths": "node_modules/(.*)",
+  "detectors_to_exclude": [
+    "incorrect-versions-of-solidity",
+    "naming-convention"
+  ]
+}

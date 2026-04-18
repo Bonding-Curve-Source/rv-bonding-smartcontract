@@ -9,12 +9,10 @@ import "./interface/IPancakeRouter02.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Math as OZMath} from "@openzeppelin/contracts/utils/math/Math.sol";
+import "./interface/IBondingCurveForFactory.sol";
 
-interface IBondingCurve {
-    function config(uint256 tradeFee) external;
-}
 /// @dev Constant-product market maker where x * y = k.
-contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
+contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurveForFactory {
     using SafeERC20 for IERC20;
 
     uint256 private constant FEE_DENOMINATOR = 10000;
@@ -28,26 +26,28 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     uint256 public constant tokenScale = 1e18;
     /// @notice Constant product invariant: k = initialVirtualRaise * virtualTokenReserve.
     uint256 public immutable curveK;
-    uint256 public targetValue;
+    uint256 public immutable targetValue;
     uint256 public constant UPDATE_INTERVAL = 300 seconds;
+    /// @dev Reject Chainlink answers older than this (seconds) in `updateParameters` and price views.
+    uint256 public constant ORACLE_STALE_SECONDS = 1 hours;
     // Active PancakeSwap V2 addresses on BSC testnet.
     address constant pancakeRouter = 0x0D34BCe358Ec89099466e63f8766D047c8007ba5;
     address constant wbnbAddress = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
 
     IERC20 public token;
     /// @notice address(0) = native raise asset (BNB/ETH), otherwise ERC20 raise asset.
-    address public tokenRaise;
-    uint8 public raiseDecimals;
-    uint8 public oracleDecimals;
+    address public immutable tokenRaise;
+    uint8 public immutable raiseDecimals;
+    uint8 public immutable oracleDecimals;
 
-    address public MainOwner;
-    address public Creator;
+    address public immutable MainOwner;
+    address public immutable Creator;
     bool public tradeDisabled;
     bool public isDex;
     /// @notice Raise target in smallest raise-asset units (native wei or ERC20 base units).
     uint256 public TARGET_TOKEN_BALANCE;
     uint256 public TRADING_FEE = 100;
-    AggregatorV3Interface public priceFeed;
+    AggregatorV3Interface public immutable priceFeed;
     uint256 public lastUpdate;
     /// @notice Total raise amount currently tracked inside the curve branch.
     uint256 public totalTokenIn;
@@ -57,7 +57,7 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     // Anti-bot and limit settings (all amounts in raise-asset base units).
     uint256 public launchTime;
     uint256 public constant ANTI_BOT_DURATION = 60;
-    uint256 public maxBuyInitialAntiBot;
+    uint256 public immutable maxBuyInitialAntiBot;
     /// @notice Max buy amount per trade in raise-asset base units.
     uint256 public maxBuyAmount;
     uint256 public maxSellPercent = 10000;
@@ -65,6 +65,10 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     uint256 public constant CREATOR_FEE_SHARE = 2000;
 
     event DexListing(address indexed pancakePair, uint256 liquidity, uint256 raiseAmount, uint256 tokenAmount);
+    event CurveInitialized(address indexed token, uint256 totalTokenSupply, uint256 launchTime);
+    event MaxBuyAmountUpdated(uint256 maxBuyAmount);
+    event MaxSellPercentUpdated(uint256 bps);
+    event MaxWalletPercentUpdated(uint256 bps);
 
     constructor(
         address _owner,
@@ -75,17 +79,16 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
         uint256 _virtualTokenReserve
     ) Ownable(_owner) {
         // Ownable owner must be TokenFactory, not msg.sender (deployer contract calls constructor).
+        require(_owner != address(0), "Zero owner");
+        require(_creator != address(0), "Zero creator");
         require(_priceFeeds != address(0), "Zero price feed");
         require(_virtualTokenReserve > 0, "Zero virtual token reserve");
         MainOwner = _owner;
         Creator = _creator;
         tokenRaise = _tokenRaise;
-        if (_tokenRaise == address(0)) {
-            raiseDecimals = 18;
-        } else {
-            raiseDecimals = IERC20Metadata(_tokenRaise).decimals();
-        }
-        initialVirtualRaise = 10 ** uint256(raiseDecimals);
+        uint8 rd = _tokenRaise == address(0) ? uint8(18) : IERC20Metadata(_tokenRaise).decimals();
+        raiseDecimals = rd;
+        initialVirtualRaise = 10 ** uint256(rd);
         virtualTokenReserve = _virtualTokenReserve;
         curveK = OZMath.mulDiv(initialVirtualRaise, virtualTokenReserve, 1);
         priceFeed = AggregatorV3Interface(_priceFeeds);
@@ -110,6 +113,15 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
         return OZMath.mulDiv(raw, 1e18, 10 ** uint256(raiseDecimals));
     }
 
+    /// @dev Chainlink `latestRoundData` with round completeness and staleness checks.
+    function _latestOraclePrice() private view returns (uint256) {
+        (uint80 roundId, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = priceFeed.latestRoundData();
+        require(answer > 0, "Invalid oracle price");
+        require(answeredInRound >= roundId, "Stale round");
+        require(block.timestamp - updatedAt <= ORACLE_STALE_SECONDS, "Stale oracle");
+        return uint256(answer);
+    }
+
     /// @notice Updates trading fee in basis points.
     function config(uint256 tradeFee) external onlyOwner {
         TRADING_FEE = tradeFee;
@@ -119,12 +131,14 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     function setMaxBuyAmount(uint256 _maxBuyAmount) external onlyOwner {
         require(_maxBuyAmount > 0, "Invalid max buy");
         maxBuyAmount = _maxBuyAmount;
+        emit MaxBuyAmountUpdated(_maxBuyAmount);
     }
 
     /// @notice Sets max buy per trade using 1e18 fixed-point raise-asset units.
     function setMaxBuyInRaiseAsset(uint256 maxRaiseAsset1e18) external onlyOwner {
         require(maxRaiseAsset1e18 > 0, "Invalid max buy");
         maxBuyAmount = _raiseAsset1e18ToRaw(maxRaiseAsset1e18);
+        emit MaxBuyAmountUpdated(maxBuyAmount);
     }
 
     /// @notice Returns current max buy amount in 1e18 fixed-point raise-asset units.
@@ -136,12 +150,14 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     function setMaxSellPercent(uint256 _maxSellPercent) external onlyOwner {
         require(_maxSellPercent > 0 && _maxSellPercent <= FEE_DENOMINATOR, "Invalid max sell");
         maxSellPercent = _maxSellPercent;
+        emit MaxSellPercentUpdated(_maxSellPercent);
     }
 
     /// @notice Sets max wallet holding percentage in basis points.
     function setMaxWalletPercent(uint256 _maxWalletPercent) external onlyOwner {
         require(_maxWalletPercent > 0 && _maxWalletPercent <= FEE_DENOMINATOR, "Invalid max wallet");
         maxWalletPercent = _maxWalletPercent;
+        emit MaxWalletPercentUpdated(_maxWalletPercent);
     }
 
     /// @notice Initializes token address and captures initial token supply.
@@ -151,13 +167,12 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
         totalTokenSupply = IERC20(_token).balanceOf(address(this));
         require(totalTokenSupply > 0, "Zero token balance");
         launchTime = block.timestamp;
+        emit CurveInitialized(_token, totalTokenSupply, launchTime);
     }
 
     /// @notice Refreshes oracle-dependent parameters and target raise threshold.
     function updateParameters() public {
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        require(price > 0, "Invalid oracle price");
-        uint256 p = uint256(price);
+        uint256 p = _latestOraclePrice();
         tokenPrice = p;
         TARGET_TOKEN_BALANCE = OZMath.mulDiv(OZMath.mulDiv(targetValue, 10 ** uint256(oracleDecimals), 1e18), 10 ** uint256(raiseDecimals), p);
         lastUpdate = block.timestamp;
@@ -200,12 +215,11 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
 
         uint256 tokenOut = calculateBuyAmount(raiseAmount);
         require(tokenOut > 0, "Zero token out");
-        require(
-            token.balanceOf(buyer) + tokenOut <= (totalTokenSupply * maxWalletPercent) / FEE_DENOMINATOR,
-            "Exceeds max wallet"
-        );
-        token.safeTransfer(buyer, tokenOut);
+        uint256 walletCap = OZMath.mulDiv(totalTokenSupply, maxWalletPercent, FEE_DENOMINATOR);
+        require(token.balanceOf(buyer) + tokenOut <= walletCap, "Exceeds max wallet");
+
         totalTokenIn += raiseAmount;
+        token.safeTransfer(buyer, tokenOut);
 
         if (!isDex && totalTokenIn >= TARGET_TOKEN_BALANCE) {
             triggerDEXListing();
@@ -217,22 +231,29 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
     function executeSell(address seller, uint256 tokenAmount) external onlyFactory nonReentrant returns (uint256) {
         require(!tradeDisabled, "Trade is disabled");
         require(tokenAmount > 0, "Zero token amount");
-        uint256 maxAllowed = (token.balanceOf(seller) * maxSellPercent) / FEE_DENOMINATOR;
+        require(seller != address(0), "Zero seller");
+        uint256 maxAllowed = OZMath.mulDiv(token.balanceOf(seller), maxSellPercent, FEE_DENOMINATOR);
         require(tokenAmount <= maxAllowed, "Exceeds max sell");
 
         token.safeTransferFrom(seller, address(this), tokenAmount);
         uint256 grossRaise = calculateSellAmount(tokenAmount);
-        uint256 fee = (grossRaise * TRADING_FEE) / FEE_DENOMINATOR;
+        uint256 fee = OZMath.mulDiv(grossRaise, TRADING_FEE, FEE_DENOMINATOR);
         uint256 netRaise = grossRaise - fee;
 
         if (tokenRaise == address(0)) {
-            require(address(this).balance >= netRaise, "Insufficient ETH liquidity");
+            require(address(this).balance >= grossRaise, "Insufficient ETH liquidity");
         } else {
             require(IERC20(tokenRaise).balanceOf(address(this)) >= grossRaise, "Insufficient raise liquidity");
         }
 
-        uint256 creatorShare = (fee * CREATOR_FEE_SHARE) / FEE_DENOMINATOR;
+        uint256 creatorShare = OZMath.mulDiv(fee, CREATOR_FEE_SHARE, FEE_DENOMINATOR);
         uint256 factoryShare = fee - creatorShare;
+
+        if (totalTokenIn >= grossRaise) {
+            totalTokenIn -= grossRaise;
+        } else {
+            totalTokenIn = 0;
+        }
 
         if (tokenRaise == address(0)) {
             if (creatorShare > 0) {
@@ -253,12 +274,6 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
             raise.safeTransfer(seller, netRaise);
         }
 
-        // Subtract the gross raise removed from the curve branch, not the net after fees.
-        if (totalTokenIn >= grossRaise) {
-            totalTokenIn -= grossRaise;
-        } else {
-            totalTokenIn = 0;
-        }
         return netRaise;
     }
 
@@ -371,9 +386,7 @@ contract BondingCurve is Ownable, ReentrancyGuard, IBondingCurve {
 
     /// @notice Returns current token price in USD units aligned to `tokenScale`.
     function getCurrentPriceInUsd() public view returns (uint256) {
-        (, int256 price, , , ) = priceFeed.latestRoundData();
-        require(price > 0, "Invalid oracle price");
-        uint256 oracleP = uint256(price);
+        uint256 oracleP = _latestOraclePrice();
         return OZMath.mulDiv(getCurrentPriceInToken(), oracleP, 10 ** uint256(oracleDecimals));
     }
 

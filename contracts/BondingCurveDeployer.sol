@@ -2,8 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "./BondingCurve.sol";
+import "./interface/IBondingCurveDeployer.sol";
 
-contract BondingCurveDeployer {
+contract BondingCurveDeployer is IBondingCurveDeployer {
     address public immutable tokenFactory;
 
     /// @notice Stores factory address authorized to deploy curves.

@@ -10,3 +10,10 @@ cache
 artifacts
 
 .env
+
+# Slither báo cáo (bỏ nếu muốn commit reports)
+reports/
+
+# Foundry
+forge-out/
+cache-forge/

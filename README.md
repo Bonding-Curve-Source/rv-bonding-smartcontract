@@ -176,15 +176,66 @@ Distribution asset is the raise asset of the pool:
 - Oracle feed must be configured per raise asset before token creation.
 - For production, prefer multisig + timelock for owner operations and add oracle staleness checks.
 
+## 7) Testing and quality assurance
+
+This repo uses **three complementary layers**: integration tests on a local chain (Hardhat), property-based fuzzing on curve math (Foundry), and static analysis (Slither). None of these replaces a professional security audit.
+
+### Integration tests (Hardhat + ethers + Chai)
+
+| | |
+|---|---|
+| **Location** | `test/tokenFactory.test.js` |
+| **Run** | `npx hardhat test` |
+| **What it exercises** | Full deploy path: `TokenFactory` → `BondingCurveDeployer` → `BondingCurve`, with `MockV3Aggregator` as Chainlink feed. |
+
+**Scenarios covered:**
+
+- Token creation stores correct metadata (`createToken` + `getTokenInfo`).
+- Revert when creation fee is insufficient.
+- Native buy and sell through the factory (`buyToken` / `sellToken`) with token balances and curve holdings asserted.
+- **Constant-product sanity:** after a buy and a partial sell, recomputed virtual reserves `x`, `y` from `curveK`, `initialVirtualRaise`, and `totalTokenIn` satisfy the same floor-division bounds as in the integration test (invariant-style check on-chain state).
+
+Uses the Hardhat network with a **high bonding target** so the real Pancake `addLiquidity` path is not hit in CI (router addresses are testnet-specific).
+
+### Fuzz tests (Foundry)
+
+| | |
+|---|---|
+| **Location** | `test/foundry/BondingCurveFuzz.t.sol` |
+| **Run** | `npm run test:fuzz` (requires `forge` on `PATH` and `npm install` for remappings) |
+| **Profile** | Default **256** fuzz sequences per `testFuzz_*` in `foundry.toml` → `[profile.default.fuzz]`; CI-style: `npm run test:fuzz:ci` (`[profile.ci]`, more runs). |
+
+**Properties exercised** (against a deployed `BondingCurve` + mock oracle, no full factory flow):
+
+- `calculateBuyAmount` is non-decreasing in raise amount (monotonicity).
+- Buy output stays strictly below the current virtual token reserve `y`.
+- `calculateSellAmount` is non-decreasing in token amount (for bounded inputs).
+- `calculateBuyAmount` matches OpenZeppelin `Math.mulDiv` for the documented buy formula.
+
+Foundry and Hardhat share the same Solidity sources under `contracts/`; JavaScript tests stay under `test/*.js`, fuzz tests under `test/foundry/*.sol`.
+
+### Static analysis (Slither)
+
+| | |
+|---|---|
+| **Tool** | [Slither](https://github.com/crytic/slither) (Trail of Bits) |
+| **Run** | `npm run slither` (terminal) or `npm run slither:report` (JSON + themed summary markdown) |
+| **Config** | `slither.config.json` |
+| **Docs** | `SLITHER.md` — exit codes, `reports/slither-report.json`, optional `reports/slither-summary.vi.md` |
+
+Slither does not execute tests; it reports potential issues (reentrancy hints, unused return values, style/gas) for human review.
+
 ## Development Commands
 
 ```shell
 npx hardhat help
 npx hardhat test
+npm run test:fuzz
 GAS_REPORT=true npx hardhat test
 npx hardhat node
 npx hardhat run scripts/deploy.js
 ```
 
 ## Contact Info
--[Telegram](https://t.me/tungreal)
+
+- [Telegram](https://t.me/tungreal)

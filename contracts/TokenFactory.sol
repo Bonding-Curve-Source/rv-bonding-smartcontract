@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Token.sol";
@@ -9,7 +10,7 @@ import "./interface/IBondingCurveForFactory.sol";
 import "./interface/IBondingCurveDeployer.sol";
 import "./interface/IPancakeRouter02.sol";
 
-contract TokenFactory is Ownable {
+contract TokenFactory is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     /// @dev PancakeSwap V2 router on the same chain as `BondingCurve`.
@@ -36,7 +37,6 @@ contract TokenFactory is Ownable {
     mapping(address => TokenInfo) public tokens;
     /// @notice Chainlink AggregatorV3
     mapping(address => address) public tokenUsdAggregator;
-    mapping(bytes32 => bool) private usedSalts;
     mapping(string => bool) public usedSymbols;
     
     uint256 public accumulatedFees;
@@ -150,10 +150,11 @@ contract TokenFactory is Ownable {
         string memory website,
         uint256 targetValue,
         address tokenRaise
-    ) external payable {
+    ) external payable nonReentrant {
         require(msg.value >= creationFee, "Insufficient creation fee");
         require(!usedSymbols[symbol], "Symbol already used");
         require(raiseAllowedTokens[tokenRaise], "Raise token not allowed");
+        usedSymbols[symbol] = true;
         (address tokenAddress, address bondingCurveAddress) = _deployTokenAndCurve(name, symbol, targetValue, tokenRaise);
     
         tokens[tokenAddress] = TokenInfo({
@@ -171,19 +172,18 @@ contract TokenFactory is Ownable {
             website: website
         });
 
-        usedSymbols[symbol] = true;
         accumulatedFees += creationFee;
         payable(owner()).transfer(creationFee);
         emit TokenCreated(tokenAddress, bondingCurveAddress,msg.sender, tokenRaise, name, symbol, targetValue);
     }
 
     /// @notice Buys token using native asset where raise amount equals `msg.value`.
-    function buyToken(address tokenAddress, uint256 minTokensExpected) external payable {
+    function buyToken(address tokenAddress, uint256 minTokensExpected) external payable nonReentrant {
         _buyToken(tokenAddress, minTokensExpected, msg.value, 0);
     }
 
     /// @notice Buys token using native asset (`msg.value`) or direct ERC20 raise transfer.
-    function buyToken(address tokenAddress, uint256 minTokensExpected, uint256 raiseAmount) external payable {
+    function buyToken(address tokenAddress, uint256 minTokensExpected, uint256 raiseAmount) external payable nonReentrant {
         _buyToken(tokenAddress, minTokensExpected, raiseAmount, 0);
     }
 
@@ -193,7 +193,7 @@ contract TokenFactory is Ownable {
         address tokenAddress,
         uint256 minTokensExpected,
         uint256 minCakeFromSwap
-    ) external payable {
+    ) external payable nonReentrant {
         require(msg.value > 0, "Zero BNB");
         _buyToken(tokenAddress, minTokensExpected, msg.value, minCakeFromSwap);
     }
@@ -247,7 +247,7 @@ contract TokenFactory is Ownable {
         address tokenAddress,
         uint256 tokenAmount,
         uint256 minETHExpected
-    ) external {
+    ) external nonReentrant {
         TokenInfo memory info = tokens[tokenAddress];
         require(info.tokenAddress != address(0), "Token does not exist");
         IBondingCurveForFactory c = IBondingCurveForFactory(info.bondingCurve);
@@ -278,7 +278,7 @@ contract TokenFactory is Ownable {
     }
 
     /// @notice Withdraws native balance accumulated by the factory.
-    function withdrawFees() external onlyOwner {
+    function withdrawFees() external onlyOwner nonReentrant {
         uint256 amount = address(this).balance;
         payable(owner()).transfer(amount);
         emit FeeCollected(amount, owner());
@@ -286,7 +286,7 @@ contract TokenFactory is Ownable {
 
     /// @notice Withdraws ERC20 token balance accumulated by the factory.
     /// @param token ERC20 token address to withdraw.
-    function withdrawTokenFees(address token) external onlyOwner {
+    function withdrawTokenFees(address token) external onlyOwner nonReentrant {
         require(token != address(0), "Invalid token address");
         IERC20 tokenContract = IERC20(token);
         uint256 amount = tokenContract.balanceOf(address(this));
@@ -331,13 +331,10 @@ contract TokenFactory is Ownable {
 
     /// @notice Placeholder for deterministic token address prediction.
     function predictTokenAddress(
-        string calldata name,
-        string calldata symbol,
-        address creator
+        string calldata,
+        string calldata,
+        address
     ) public pure returns (address) {
-        name;
-        symbol;
-        creator;
         return address(0);
     }
 

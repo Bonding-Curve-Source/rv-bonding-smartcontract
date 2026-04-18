@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 interface IBondingCurve {
-    event Buy(address buyer, uint256 tokenAmount, uint256 ethAmount);
-    event Sell(address seller, uint256 tokenAmount, uint256 ethAmount);
-    event LiquidityAdded(address poolAddress, uint256 liquidity);
+    event Buy(address indexed buyer, uint256 tokenAmount, uint256 ethAmount);
+    event Sell(address indexed seller, uint256 tokenAmount, uint256 ethAmount);
+    event LiquidityAdded(address indexed poolAddress, uint256 liquidity);
 
     function initialize(address token, uint256 initialPrice) external;
 

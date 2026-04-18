@@ -1,7 +1,16 @@
 {
   "name": "hardhat-project",
   "scripts": {
+    "slither": "slither .",
+    "slither:json": "mkdir -p reports && slither . --json reports/slither-report.json",
+    "slither:sarif": "mkdir -p reports && slither . --sarif reports/slither.sarif",
+    "slither:export": "mkdir -p reports && slither . --json reports/slither-report.json --sarif reports/slither.sarif",
+    "slither:txt": "mkdir -p reports && slither . --disable-color 2>&1 | tee reports/slither-output.txt",
+    "slither:summary": "node scripts/slither-summary.mjs",
+    "slither:report": "mkdir -p reports && slither . --json reports/slither-report.json && node scripts/slither-summary.mjs",
     "compile": "hardhat compile",
+    "test:fuzz": "forge test -vv",
+    "test:fuzz:ci": "FOUNDRY_PROFILE=ci forge test -vv",
     "export:fe-abis": "node scripts/export-fe-abis.js",
     "add:raise-token": "hardhat run scripts/add-raise-token.js",
     "curve:set-wallet-limit": "hardhat run scripts/set-max-wallet-percent.js",
